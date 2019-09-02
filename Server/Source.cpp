@@ -40,7 +40,7 @@ void main()
 	// The WSACleanup function destructs the use of WS2_32.DLL by a process.
 	if (NO_ERROR != WSAStartup(MAKEWORD(2, 2), &wsaData))
 	{
-		cout << "Time Server: Error at WSAStartup()\n";
+		cout << "Web Server: Error at WSAStartup()\n";
 		return;
 	}
 
@@ -64,7 +64,7 @@ void main()
 	// error number associated with the last error that occurred.
 	if (INVALID_SOCKET == listenSocket)
 	{
-		cout << "Time Server: Error at socket(): " << WSAGetLastError() << endl;
+		cout << "Web Server: Error at socket(): " << WSAGetLastError() << endl;
 		WSACleanup();
 		return;
 	}
@@ -97,7 +97,7 @@ void main()
 	// sockaddr structure (in bytes).
 	if (SOCKET_ERROR == bind(listenSocket, (SOCKADDR *)&serverService, sizeof(serverService)))
 	{
-		cout << "Time Server: Error at bind(): " << WSAGetLastError() << endl;
+		cout << "Web Server: Error at bind(): " << WSAGetLastError() << endl;
 		closesocket(listenSocket);
 		WSACleanup();
 		return;
@@ -108,7 +108,7 @@ void main()
 	// from other clients). This sets the backlog parameter.
 	if (SOCKET_ERROR == listen(listenSocket, 5))
 	{
-		cout << "Time Server: Error at listen(): " << WSAGetLastError() << endl;
+		cout << "Web Server: Error at listen(): " << WSAGetLastError() << endl;
 		closesocket(listenSocket);
 		WSACleanup();
 		return;
@@ -151,7 +151,7 @@ void main()
 		nfd = select(0, &waitRecv, &waitSend, NULL, &timeout);
 		if (nfd == SOCKET_ERROR)
 		{
-			cout << "Time Server: Error at select(): " << WSAGetLastError() << endl;
+			cout << "Web Server: Error at select(): " << WSAGetLastError() << endl;
 			WSACleanup();
 			return;
 		}
@@ -189,7 +189,7 @@ void main()
 	}
 
 	// Closing connections and Winsock.
-	cout << "Time Server: Closing Connection.\n";
+	cout << "Web Server: Closing Connection.\n";
 	closesocket(listenSocket);
 	WSACleanup();
 }
@@ -205,11 +205,6 @@ bool addSocket(SOCKET id, int what)
 			sockets[i].send = IDLE;
 			sockets[i].len = 0;
 			socketsCount++;
-			if (setsockopt(id, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) == SOCKET_ERROR) {
-				cout << "Time Server: Error at setsockopt: " << WSAGetLastError() << endl;
-				return false;
-			}
-
 			return true;
 		}
 	}
@@ -232,10 +227,10 @@ void acceptConnection(int index)
 	SOCKET msgSocket = accept(id, (struct sockaddr *)&from, &fromLen);
 	if (INVALID_SOCKET == msgSocket)
 	{
-		cout << "Time Server: Error at accept(): " << WSAGetLastError() << endl;
+		cout << "Web Server: Error at accept(): " << WSAGetLastError() << endl;
 		return;
 	}
-	cout << "Time Server: Client " << inet_ntoa(from.sin_addr) << ":" << ntohs(from.sin_port) << " is connected." << endl;
+	cout << "Web Server: Client " << inet_ntoa(from.sin_addr) << ":" << ntohs(from.sin_port) << " is connected." << endl;
 
 	//
 	// Set the socket to be in non-blocking mode.
@@ -243,7 +238,7 @@ void acceptConnection(int index)
 	unsigned long flag = 1;
 	if (ioctlsocket(msgSocket, FIONBIO, &flag) != 0)
 	{
-		cout << "Time Server: Error at ioctlsocket(): " << WSAGetLastError() << endl;
+		cout << "Web Server: Error at ioctlsocket(): " << WSAGetLastError() << endl;
 	}
 
 	if (addSocket(msgSocket, RECEIVE) == false)
@@ -264,10 +259,10 @@ void receiveMessage(int index)
 	if (SOCKET_ERROR == bytesRecv)
 	{
 		if (WSAGetLastError() == WSAETIMEDOUT) {
-			cout << "Time Server: Error at recv(): Too long to receive, time out triggered." << endl;
+			cout << "Web Server: Error at recv(): Too long to receive, time out triggered." << endl;
 		}
 		else {
-			cout << "Time Server: Error at recv(): " << WSAGetLastError() << endl;
+			cout << "Web Server: Error at recv(): " << WSAGetLastError() << endl;
 		}
 		closesocket(msgSocket);
 		removeSocket(index);
@@ -282,13 +277,14 @@ void receiveMessage(int index)
 	else
 	{
 		sockets[index].buffer[len + bytesRecv] = '\0'; //add the null-terminating to make it a string
-		cout << "Time Server: Recieved: " << bytesRecv << " bytes of \"" << &sockets[index].buffer[len] << "\" message.\n";
+		cout << "Web Server: Recieved: " << bytesRecv << " bytes of \"" << &sockets[index].buffer[len] << "\" \n";
 		sockets[index].len += bytesRecv;
 		string req, body;
-		map<string, string> reqContent;
+		//map<string, string> reqContent;
+		string requestloop = sockets[index].buffer;
 		if (sockets[index].len > 0)
 		{
-			parseHttpRequest(sockets[index].buffer, &sockets[index].len, req, reqContent, body);
+			parseHttpRequest(sockets[index].buffer, &sockets[index].len, req, body);
 			sockets[index].len = 0;
 			strcpy(sockets[index].buffer, "\0");
 			sockets[index].send = SEND;
@@ -300,20 +296,20 @@ void receiveMessage(int index)
 			{
 				sockets[index].sendSubType = ERROR_REQUEST;
 			}
-			string ans;
+			string answer;
 
 			if (sockets[index].sendSubType == GET)
-				ans = GetAnswer(req);
+				answer = GetAnswer(req);
 			else if (sockets[index].sendSubType == PUT)
-				ans = PutAnswer(req, body);
+				answer = PutAnswer(req, body);
 			else if (sockets[index].sendSubType == OPTIONS)
-				ans = OptionsAnswer();
+				answer = OptionsAnswer();
 			else if (sockets[index].sendSubType == HEAD)
-				ans = HeadAnswer(req);
+				answer = HeadAnswer(req);
 			else if (sockets[index].sendSubType == _DELETE)
-				ans = DeleteAnswer(req);
+				answer = DeleteAnswer(req);
 			else if (sockets[index].sendSubType == TRACE)
-				ans = TraceAnswer(req);
+				answer = TraceAnswer(req, requestloop);
 			else if (sockets[index].sendSubType == EXIT)
 			{
 				closesocket(msgSocket);
@@ -322,11 +318,13 @@ void receiveMessage(int index)
 			}
 			else
 			{
-				ans = req + " method not supported.";
+				answer = req + " method not supported.";
 			}
 
-			for (int i = 0; i < ans.size(); ++i) sockets[index].buffer[i] = ans[i];
-			sockets[index].buffer[ans.size()] = 0;
+			for (int i = 0; i < answer.size(); ++i) 
+				sockets[index].buffer[i] = answer[i];
+			
+			sockets[index].buffer[answer.size()] = 0;
 			return;
 		}
 	}
@@ -335,30 +333,30 @@ void receiveMessage(int index)
 void sendMessage(int index)
 {
 	int bytesSent = 0;
-	char sendBuff[256];
+	char sendBuff[400];
 
 	SOCKET msgSocket = sockets[index].id;
 	strcpy(sendBuff, sockets[index].buffer);
 	bytesSent = send(msgSocket, sendBuff, (int)strlen(sendBuff), 0);
 	if (SOCKET_ERROR == bytesSent)
 	{
-		cout << "Time Server: Error at send(): " << WSAGetLastError() << endl;
+		cout << "Web Server: Error at send(): " << WSAGetLastError() << endl;
 		return;
 	}
 
-	cout << "Time Server: Sent: " << bytesSent << "\\" << strlen(sendBuff) << " bytes of \"" << sendBuff << "\" message.\n";
+	cout << "Web Server: Sent: " << bytesSent << "\\" << strlen(sendBuff) << " bytes of \"" << sendBuff << "\" \n";
 
 	sockets[index].send = IDLE;
 }
 
-void parseHttpRequest(char* recvBuff, int* buffSize, string& req, map<string, string>& content, string& body)
+void parseHttpRequest(char* recvBuff, int* buffSize, string& req, string& body)
 {
 	string tempBuff(recvBuff);
 	req = getLine(tempBuff);
 	string currLine = getLine(tempBuff);
 	while (currLine.size() > 0)
 	{
-		content.insert(parseHttpLine(currLine));
+		//content.insert(parseHttpLine(currLine));
 		currLine = getLine(tempBuff);
 	}
 	body.append(tempBuff);
@@ -391,7 +389,8 @@ pair<string, string> parseHttpLine(string line)
 	}
 	else
 	{
-		reqCont.first = line; reqCont.second = "";
+		reqCont.first = line;
+		reqCont.second = "";
 	}
 
 	return reqCont;
@@ -457,7 +456,8 @@ string GetFileContent(string request)
 
 string writeToFile(string body, string fileName)
 {
-	if (fileName[0] == '/') fileName = fileName.substr(1, fileName.size());
+	if (fileName[0] == '/')
+		fileName = fileName.substr(1, fileName.size());
 	ofstream outputFile;
 	outputFile.open(fileName);
 	if (outputFile.is_open())
@@ -505,12 +505,13 @@ string GetAnswer(string request)
 		messageStatus += "404 Not Found";
 	else
 		messageStatus += "200 OK";
+
 	string httpHeader = HeaderToSend(messageStatus);
 	char* MessageSize = new char[8];
 	_itoa(body.size(), MessageSize, 10);
 	httpHeader += MessageSize;
 	delete[]MessageSize;
-	return httpHeader + "\n\n" + body;
+	return httpHeader + "\n\n" + body+"\r\n";
 }
 
 string PutAnswer(string request, string body)
@@ -552,11 +553,11 @@ string OptionsAnswer()
 	return returnMessage;
 }
 
-string TraceAnswer(string request)
+string TraceAnswer(string request, string body)
 {
 	string answer("HTTP/1.1 200 OK");
 	answer += "\nServer: Itamar-Shay Server\nContent-Type: message/http";
-	return answer;
+	return answer + "\n\n" +body;
 }
 
 string HeadAnswer(string request)
@@ -573,5 +574,5 @@ string HeadAnswer(string request)
 	_itoa(body.size(), MessageSize, 10);
 	header += MessageSize;
 	delete[]MessageSize;
-	return header;
+	return header+ "\n\n";
 }
