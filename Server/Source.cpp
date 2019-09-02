@@ -321,9 +321,9 @@ void receiveMessage(int index)
 				answer = req + " method not supported.";
 			}
 
-			for (int i = 0; i < answer.size(); ++i) 
+			for (int i = 0; i < answer.size(); ++i)
 				sockets[index].buffer[i] = answer[i];
-			
+
 			sockets[index].buffer[answer.size()] = 0;
 			return;
 		}
@@ -344,7 +344,7 @@ void sendMessage(int index)
 		return;
 	}
 
-	cout << "Web Server: Sent: " << bytesSent << "\\" << strlen(sendBuff) << " bytes of \"" << sendBuff << "\" \n";
+	cout << "Web Server: Sent: " << bytesSent << "\\" << strlen(sendBuff) << " bytes of \n\"" << sendBuff << "\" \n";
 
 	sockets[index].send = IDLE;
 }
@@ -376,25 +376,25 @@ string getLine(string& buffer)
 	return resultString;
 }
 
-pair<string, string> parseHttpLine(string line)
-{
-	pair<string, string> reqCont;
-	if (line.find(':') != string::npos)
-	{
-		reqCont.first = line.substr(0, line.find(':'));
-		if (line.find(' ') != string::npos)
-			reqCont.second = line.substr(line.find(' '), line.size());
-		else
-			reqCont.second = "";
-	}
-	else
-	{
-		reqCont.first = line;
-		reqCont.second = "";
-	}
-
-	return reqCont;
-}
+//pair<string, string> parseHttpLine(string line)
+//{
+//	pair<string, string> reqCont;
+//	if (line.find(':') != string::npos)
+//	{
+//		reqCont.first = line.substr(0, line.find(':'));
+//		if (line.find(' ') != string::npos)
+//			reqCont.second = line.substr(line.find(' '), line.size());
+//		else
+//			reqCont.second = "";
+//	}
+//	else
+//	{
+//		reqCont.first = line;
+//		reqCont.second = "";
+//	}
+//
+//	return reqCont;
+//}
 
 int parseHttpMethod(string request)
 {
@@ -424,10 +424,14 @@ int parseHttpMethod(string request)
 	return result;
 }
 
-string HeaderToSend(const string& statusMessage)
+string HeaderToSend()
 {
-	string response = statusMessage;
-	response += "\nServer: Itamar-Shay Server\nContent-Type: text/html\nContent-length: ";
+	time_t currentTime;
+	string response;
+	response.append("\r\nDate: ");
+	time(&currentTime);
+	response.append(ctime(&currentTime));
+	response += "\r\nServer: Itamar-Shay Server\r\nContent-Type: text/html\r\nContent-length: ";
 	return response;
 }
 
@@ -450,7 +454,7 @@ string GetFileContent(string request)
 			tav = file.get();
 		}
 	}
-	else content = "<!DOCTYPE HTML>\n<html><p>Itamar-Shay Server</p></html>";
+	else content = "<!DOCTYPE HTML>\r\n<html><p>Itamar-Shay Server</p></html>";
 	return content;
 }
 
@@ -496,22 +500,31 @@ string deleteFile(string fileName)
 	}
 }
 
+string MakeOpeningHeader(const string &body)
+{
+	string messageStatus = "HTTP/1.1 ";
+	if (body.compare("File not found") == 0)
+		messageStatus += "404 Not Found\r\n";
+	else
+		messageStatus += "200 OK\r\n";
+	return messageStatus;
+}
+
+string SizeOfBodyMsg(const string& body)
+{
+	int len = body.size();
+	string size = to_string(len);
+	return size;
+}
 
 string GetAnswer(string request)
 {
 	string body = GetFileContent(request);
-	string messageStatus = "HTTP/1.1 ";
-	if (body.compare("File not found") == 0)
-		messageStatus += "404 Not Found";
-	else
-		messageStatus += "200 OK";
+	string messageStatus = MakeOpeningHeader(body);
+	messageStatus += HeaderToSend();
+	messageStatus += SizeOfBodyMsg(body);
 
-	string httpHeader = HeaderToSend(messageStatus);
-	char* MessageSize = new char[8];
-	_itoa(body.size(), MessageSize, 10);
-	httpHeader += MessageSize;
-	delete[]MessageSize;
-	return httpHeader + "\n\n" + body+"\r\n";
+	return messageStatus + "\r\n\n" + body;
 }
 
 string PutAnswer(string request, string body)
@@ -524,7 +537,7 @@ string PutAnswer(string request, string body)
 		fileName = requestSub.substr(0, requestSub.find(' '));
 
 	string messageStatus = writeToFile(body, fileName);
-	string header = HeaderToSend(messageStatus);
+	string header = HeaderToSend();
 	header += "0\n\n";
 	return header;
 }
@@ -534,7 +547,7 @@ string DeleteAnswer(string request)
 	string requestSub = request.substr(request.find(' ') + 1, request.size());
 	string fileName = requestSub.substr(0, requestSub.find(' '));
 	string statusMess = deleteFile(fileName);
-	string header = HeaderToSend(statusMess);
+	string header = HeaderToSend();
 	string body;
 	if (statusMess.find("200") != string::npos)
 		body = "<html><h1>URL deleted.</h1></html>";
@@ -546,7 +559,7 @@ string DeleteAnswer(string request)
 
 string OptionsAnswer()
 {
-	string returnMessage = HeaderToSend("HTTP/1.1 204 No Content");
+	string returnMessage = HeaderToSend();
 	string methodsAllowed = "Access-Control-Allow-Methods: GET, PUT, OPTIONS, TRACE, HEAD, DELETE, Exit";
 	returnMessage += "0";
 	returnMessage += "\n" + methodsAllowed + "\n\n";
@@ -557,22 +570,15 @@ string TraceAnswer(string request, string body)
 {
 	string answer("HTTP/1.1 200 OK");
 	answer += "\nServer: Itamar-Shay Server\nContent-Type: message/http";
-	return answer + "\n\n" +body;
+	return answer + "\n\n" + body;
 }
 
 string HeadAnswer(string request)
 {
 	string body = GetFileContent(request);
-	string messageStatus = "HTTP/1.1 ";
-	if (body.compare("File not found") == 0)
-		messageStatus.append("404 Not Found");
-	else
-		messageStatus.append("200 OK");
+	string header = MakeOpeningHeader(body);
+	header += HeaderToSend();
+	header += SizeOfBodyMsg(body);
 
-	string header = HeaderToSend(messageStatus);
-	char* MessageSize = new char[8];
-	_itoa(body.size(), MessageSize, 10);
-	header += MessageSize;
-	delete[]MessageSize;
-	return header+ "\n\n";
+	return header + "\n\n";
 }

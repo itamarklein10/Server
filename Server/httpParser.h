@@ -42,7 +42,9 @@ string HeadAnswer(string request);
 string GetFileContent(string request);
 string writeToFile(string body, string fileName);
 string deleteFile(string fileName);
-
+string HeaderToSend();
+string MakeOpeningHeader(const string &body);
+string SizeOfBodyMsg(const string& body);
 
 
 #endif
